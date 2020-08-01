@@ -7,7 +7,7 @@ on:
   push:
     branches: [ mirai ]
   pull_request:
-    branches: [ mirai ]
+    branches: [ mirai ] 
 
 jobs:
   build:
