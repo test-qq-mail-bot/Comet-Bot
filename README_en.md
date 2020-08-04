@@ -1,8 +1,10 @@
 # Comet-Bot
 
-A QQ Group bot developed in [Mirai-Core](https://github.com/mamoe/mirai).
+Just a bot.
 
 This bot is under heavy develop now, Many feature may not work as well.
+
+**All development is for learning, DO NOT use it for illegal purposes**
 
 中文版本: [README](https://github.com/StarWishsama/Comet-Bot/blob/mirai/README_zhCN.md)
 
@@ -17,14 +19,13 @@ This bot is under heavy develop now, Many feature may not work as well.
 ## 🎉 Features
 * Search picture original source by picture
 * Rainbow Six: Siege game data info lookup
-* Class clock in
-* Check-in
+* Clock in & Check-In
 * Bilibili user info/dynamic/streaming notice
 * Search music and share as LightApp style
 * Arknights / PCR draw simulator
 * Auto convert QQ LightApp message to text for PC user(s)
-* VTuber monitor (BiliBili/Twitter)
-* Tweet Pusher
+* VTuber monitor (BiliBili/🐦)
+* 🐦 user's dynamic Pusher
 * RCON feature
 * Mute/Kick group member
 * WIP
@@ -47,4 +48,22 @@ git clone https://github.com/StarWishsama/Comet-Bot.git
 Configurations for Gradle is well done. Double-click `gradlew.bat` in the root directory to compile a jar file in folder `/build/libs`.
 
 ## 📜 License 
+**All development is for learning, DO NOT use it for illegal purposes**
+
 [AGPL v3.0](https://github.com/StarWishsama/Comet-Bot/blob/master/LICENSE)
+------
+
+    Copyright (C) 2018-2020 StarWishsama
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+    
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+    
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.

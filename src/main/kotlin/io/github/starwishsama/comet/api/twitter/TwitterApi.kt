@@ -14,15 +14,14 @@ import io.github.starwishsama.comet.exceptions.EmptyTweetException
 import io.github.starwishsama.comet.exceptions.RateLimitException
 import io.github.starwishsama.comet.exceptions.TwitterApiException
 import io.github.starwishsama.comet.objects.pojo.twitter.Tweet
-import io.github.starwishsama.comet.objects.pojo.twitter.TwitterErrorInfo
 import io.github.starwishsama.comet.objects.pojo.twitter.TwitterUser
+import io.github.starwishsama.comet.utils.BotUtil
 import io.github.starwishsama.comet.utils.FileUtil
 import io.github.starwishsama.comet.utils.NetUtil
 import io.github.starwishsama.comet.utils.isType
 import java.io.IOException
 import java.time.Duration
 import java.time.LocalDateTime
-import java.util.*
 
 /**
  * Twitter API
@@ -40,10 +39,13 @@ object TwitterApi : ApiExecutor {
     // Bearer Token
     var token: String? = BotVariables.cache["token"].asString
 
-    private var cacheTweet = mutableMapOf<String, LinkedList<Tweet>>()
+    private var cacheTweet = mutableMapOf<String, Tweet>()
 
     // Api 调用次数
     override var usedTime: Int = 0
+
+    // 超时重连次数
+    private var retryTime: Int = 0
 
     private const val apiReachLimit = "已达到 Twitter API调用上限"
 
@@ -98,15 +100,8 @@ object TwitterApi : ApiExecutor {
         if (body != null) {
             try {
                 tUser = gson.fromJson(result?.body(), TwitterUser::class.java)
-            } catch (e: JsonSyntaxException) {
-                try {
-                    val errorInfo = gson.fromJson(result?.body(), TwitterErrorInfo::class.java)
-                    BotVariables.logger.warning("[蓝鸟] 调用 API 时出现了问题\n${errorInfo.getReason()}")
-                    throw TwitterApiException(errorInfo.errors[0].code, errorInfo.errors[0].reason)
-                } catch (e: JsonSyntaxException) {
-                    BotVariables.logger.warning("[蓝鸟] 解析推文 JSON 时出现问题: 不支持的类型", e)
-                    FileUtil.createErrorReportFile("twitter", e, body, url)
-                }
+            } catch (e: Throwable) {
+                FileUtil.createErrorReportFile("twitter", e, body, url)
             }
         }
 
@@ -145,8 +140,12 @@ object TwitterApi : ApiExecutor {
         val request = NetUtil.doHttpRequestGet("$twitterApiUrl/statuses/show.json?id=$id&tweet_mode=extended", 5_000).header("authorization", "Bearer $token")
         val response = request.executeAsync()
 
-        if (response.isOk && response.isType(ContentType.JSON.value)) {
-            return parseJsonToTweet(response.body())
+        try {
+            if (response.isOk && response.isType(ContentType.JSON.value)) {
+                return parseJsonToTweet(response.body())
+            }
+        } catch (t: Throwable) {
+            FileUtil.createErrorReportFile("twitter", t, response.body(), request.url)
         }
 
         return null
@@ -155,64 +154,58 @@ object TwitterApi : ApiExecutor {
     @Throws(RateLimitException::class)
     fun getTweetWithCache(username: String): Tweet? {
         val startTime = LocalDateTime.now()
+        var tweet: Tweet? = null
 
-        try {
-            var cacheTweets = cacheTweet[username]
-            val result: Tweet?
+        BotUtil.executeWithRetry(
+                {
+                    try {
+                        if (retryTime >= 3) retryTime = 0
 
-            if (cacheTweets == null) {
-                cacheTweets = LinkedList()
-            }
+                        var cachedTweet = cacheTweet[username]
+                        val result: Tweet?
 
-            result = if (cacheTweets.isNotEmpty() && Duration.between(cacheTweets[0].getSentTime(), LocalDateTime.now())
-                    .toMinutes() <= 1
-            ) {
-                cacheTweets[0]
-            } else {
-                getUserLatestTweet(username)
-            }
+                        if (cachedTweet == null) {
+                            cachedTweet = getUserLatestTweet(username)
+                        }
 
-            BotVariables.logger.debug(
-                "[蓝鸟] 查询用户最新推文耗时 ${Duration.between(startTime, LocalDateTime.now()).toMillis()}ms"
-            )
-            return result
-        } catch (x: TwitterApiException) {
-            BotVariables.logger.warning("[蓝鸟] 调用 API 时出现了问题\n错误代码: ${x.code}\n理由: ${x.reason}}")
-        }
-        return null
+                        result = if (Duration.between(cachedTweet?.getSentTime(), LocalDateTime.now()).toMinutes() <= 3
+                        ) {
+                            cachedTweet
+                        } else {
+                            getUserLatestTweet(username)
+                        }
+
+                        BotVariables.logger.debug(
+                                "[蓝鸟] 查询用户最新推文耗时 ${Duration.between(startTime, LocalDateTime.now()).toMillis()}ms"
+                        )
+                        tweet = result
+                    } catch (x: TwitterApiException) {
+                        BotVariables.logger.warning("[蓝鸟] 调用 API 时出现了问题", x)
+                    }
+                },
+                3,
+                "[蓝鸟] 调用 API 时出现了问题: 超时重连失败"
+        )
+
+        return tweet
     }
 
+    @Synchronized
     fun addCacheTweet(username: String, tweet: Tweet) {
-        if (!cacheTweet.containsKey(username)) {
-            cacheTweet[username] = LinkedList()
-        } else {
-            cacheTweet[username]?.add(tweet)
-        }
+        cacheTweet[username] = tweet
     }
 
     private fun parseJsonToTweet(json: String): Tweet? {
-        var tweet: Tweet? = null
-        try {
-            val tweets = gson.fromJson(
-                    json,
-                    object : TypeToken<List<Tweet>>() {}.type
-            ) as List<Tweet>
-
-            if (tweets.isEmpty()) {
-                throw EmptyTweetException()
-            }
-            tweet = tweets[0]
-            addCacheTweet(tweet.user.name, tweet)
+        val parsedTweet: Tweet? = try {
+            gson.fromJson(json, Tweet::class.java)
         } catch (e: JsonSyntaxException) {
-            try {
-                val errorInfo = gson.fromJson(json, TwitterErrorInfo::class.java)
-                BotVariables.logger.warning("[蓝鸟] 调用 API 时出现了问题\n${errorInfo}")
-                throw TwitterApiException(errorInfo.errors[0].code, errorInfo.errors[0].reason)
-            } catch (e: JsonSyntaxException) {
-                BotVariables.logger.warning("[蓝鸟] 解析推文 JSON 时出现问题: 不支持的类型", e)
-            }
+            (gson.fromJson(json, object : TypeToken<List<Tweet>>() {}.type) as List<Tweet>)[0]
         }
-        return tweet
+
+        if (parsedTweet != null) {
+            addCacheTweet(parsedTweet.user.name, parsedTweet)
+        }
+        return parsedTweet
     }
 
     override fun isReachLimit(): Boolean {

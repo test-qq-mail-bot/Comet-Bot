@@ -12,6 +12,7 @@ import io.github.starwishsama.comet.utils.BotUtil
 import io.github.starwishsama.comet.utils.isNumeric
 import io.github.starwishsama.comet.utils.toMsgChain
 import kotlinx.coroutines.delay
+import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.MessageEvent
 import net.mamoe.mirai.message.data.EmptyMessageChain
@@ -20,15 +21,14 @@ import org.apache.commons.lang3.Validate
 
 class BiliBiliCommand : ChatCommand {
     override suspend fun execute(event: MessageEvent, args: List<String>, user: BotUser): MessageChain {
-        if (BotUtil.isNoCoolDown(user.id)) {
+        if (BotUtil.isNoCoolDown(user.id) && event is GroupMessageEvent) {
             if (args.isEmpty()) {
                 return getHelp().toMsgChain()
             } else {
                 when (args[0]) {
                     "sub", "订阅" -> return advancedSubscribe(user, args, event)
                     "unsub", "取消订阅" -> {
-                        val id = if (event is GroupMessageEvent) event.group.id else args[2].toLong()
-                        return unsubscribe(args, id)
+                        return unsubscribe(args, event.group.id)
                     }
                     "list" -> {
                         event.reply("请稍等...")
@@ -49,6 +49,15 @@ class BiliBiliCommand : ChatCommand {
                             }
                         } else getHelp().toMsgChain()
                     }
+                    "push" -> {
+                        return if (user.isBotAdmin() || event.sender.isOperator()) {
+                            val cfg = GroupConfigManager.getConfigSafely(event.group.id)
+                            cfg.biliPushEnabled = !cfg.biliPushEnabled
+                            BotUtil.sendMessage("B站开播提醒功能已${if (cfg.biliPushEnabled) "开启" else "关闭"}")
+                        } else {
+                            BotUtil.sendLocalMessage("msg.no-permission").toMsgChain()
+                        }
+                    }
                     else -> return getHelp().toMsgChain()
                 }
             }
@@ -63,6 +72,7 @@ class BiliBiliCommand : ChatCommand {
         /bili sub [用户名] 订阅用户相关信息
         /bili unsub [用户名] 取消订阅用户相关信息
         /bili info [用户名] 查看用户的动态
+        /bili push 开启/关闭本群开播推送
     """.trimIndent()
 
     private suspend fun advancedSubscribe(user: BotUser, args: List<String>, event: MessageEvent): MessageChain {

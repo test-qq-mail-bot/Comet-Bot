@@ -1,6 +1,7 @@
 package io.github.starwishsama.comet.tasks
 
 import io.github.starwishsama.comet.BotVariables
+import io.github.starwishsama.comet.BotVariables.bot
 import io.github.starwishsama.comet.api.twitter.TwitterApi
 import io.github.starwishsama.comet.exceptions.RateLimitException
 import io.github.starwishsama.comet.managers.GroupConfigManager
@@ -22,6 +23,8 @@ object TweetUpdateChecker : CometPusher {
 
     @ExperimentalTime
     override fun retrieve() {
+        if (!bot.isOnline) future.cancel(false)
+
         /** 检查是否有 Twitter Token, 如无则手动获取 */
         if (TwitterApi.token.isNullOrEmpty()) {
             TwitterApi.getBearerToken()
@@ -35,7 +38,7 @@ object TweetUpdateChecker : CometPusher {
         }
 
         /** 获取推文 */
-        subList.forEach {
+        subList.parallelStream().forEach {
             try {
                 val tweet = TwitterApi.getTweetWithCache(it)
                 val oldTweet = pushContent[it]?.tweet
@@ -62,7 +65,7 @@ object TweetUpdateChecker : CometPusher {
         val pushQueue = HashMap<String, List<Long>>()
 
         /** 从分群配置文件中获取需要被推送的群 */
-        BotVariables.perGroup.forEach {
+        BotVariables.perGroup.parallelStream().forEach {
             /** 检查该群是否启用了推送功能 */
             if (GroupConfigManager.getConfigSafely(it.id).twitterPushEnabled) {
                 for (subs in it.twitterSubscribers) {
@@ -92,7 +95,7 @@ object TweetUpdateChecker : CometPusher {
                 var message = "${tweet.user.name} (@${userName}) 发送了一条推文\n${tweet.getFullText()}".toMsgChain()
                 pushGroups.forEach {
                     runBlocking {
-                        val group = BotVariables.bot.getGroup(it)
+                        val group = bot.getGroup(it)
                         val image = tweet.getPictureOrNull(group)
                         if (image != null) {
                             message += image

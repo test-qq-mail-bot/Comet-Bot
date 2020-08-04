@@ -42,11 +42,11 @@ data class Tweet(
         @SerializedName("retweeted_status")
         val retweetStatus: ReTweet?,
         @SerializedName("retweet_count")
-        val retweetCount: Long,
+        val retweetCount: Long?,
         @SerializedName("favorite_count")
-        val likeCount: Long,
+        val likeCount: Long?,
         @SerializedName("possibly_sensitive")
-        val sensitive: Boolean,
+        val sensitive: Boolean?,
         @SerializedName("quoted_status")
         val quotedStatus: Tweet?,
         @SerializedName("is_quote_status")
@@ -56,18 +56,18 @@ data class Tweet(
     fun getFullText(): String {
         val duration =
                 Duration.between(getSentTime(), LocalDateTime.now())
-        val durationText = "\n\n距离发送已过去了 ${duration.toKotlinDuration().toFriendly(TimeUnit.DAYS)}"
+        val extraText = "\n❤${likeCount}|\uD83D\uDD01${retweetCount}\n\n距离发送已过去了 ${duration.toKotlinDuration().toFriendly(TimeUnit.DAYS)}"
 
         if (isQuoted && quotedStatus != null) {
-            return "对于 ${quotedStatus.user.name} 的推文\n${quotedStatus.text}\n\n${user.name} 进行了评论\n$text" + durationText
+            return "对于 ${quotedStatus.user.name} 的推文\n${quotedStatus.text}\n\n${user.name} 进行了评论\n$text" + extraText
         }
 
         if (replyTweetId != null) {
-            val repliedTweet = TwitterApi.getTweetById(replyTweetId) ?: return text + durationText
-            return "对于 ${repliedTweet.user.name} 的推文\n${repliedTweet.text}\n\n${user.name} 进行了回复\n$text" + durationText
+            val repliedTweet = TwitterApi.getTweetById(replyTweetId) ?: return text + extraText
+            return "对于 ${repliedTweet.user.name} 的推文\n${repliedTweet.text}\n\n${user.name} 进行了回复\n$text" + extraText
         }
 
-        return text + durationText
+        return text + extraText
     }
 
     fun contentEquals(tweet: Tweet): Boolean {

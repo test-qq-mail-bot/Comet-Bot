@@ -46,6 +46,11 @@ class TwitterCommand : ChatCommand {
                         val list = GroupConfigManager.getConfigSafely(id).twitterSubscribers
                         if (list.isEmpty()) "没有订阅任何蓝鸟用户".toMsgChain() else list.toString().toMsgChain()
                     }
+                    "push" -> {
+                        val switch = GroupConfigManager.getConfigSafely(id).twitterPushEnabled
+                        GroupConfigManager.getConfigSafely(id).twitterPushEnabled = !switch
+                        return BotUtil.sendMessage("蓝鸟动态推送已${if (switch) "开启" else "关闭"}")
+                    }
                     else -> getHelp().toMsgChain()
                 }
             }
@@ -165,5 +170,6 @@ class TwitterCommand : ChatCommand {
         /twit info [蓝鸟ID] 查询账号信息
         /twit sub [蓝鸟ID] 订阅用户的推文
         /twit unsub [蓝鸟ID] 取消订阅用户的推文
+        /twit push 开启/关闭本群推文推送
     """.trimIndent()
 }
